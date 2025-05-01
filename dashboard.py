@@ -5,8 +5,8 @@ import os
 
 # Configuration
 # Point back to the primary output file, which is now cleaned
-DATA_FILE = "classified_learning_outcomes_cleaned.csv" # Use the cleaned file
-DUMMY_DATA_FILE = "dummy_classified_data.csv" # For development
+DATA_FILE = "data/classified_learning_outcomes_cleaned.csv" # Use the cleaned file from data dir
+DUMMY_DATA_FILE = "data/dummy_classified_data.csv" # For development, from data dir
 BYU_AIMS = [
     "Spiritually Strengthening",
     "Intellectually Enlarging",
