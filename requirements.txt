@@ -1,0 +1,9 @@
+requests
+beautifulsoup4
+pandas
+selenium
+openai
+python-dotenv
+tiktoken
+streamlit
+plotly 

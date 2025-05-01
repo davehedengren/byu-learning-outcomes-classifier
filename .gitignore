@@ -1,0 +1,28 @@
+# Environment variables
+.env
+
+# Virtual environment
+venv/
+*.venv/
+env/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Log files
+*.log
+
+# Downloaded HTML pages
+course_pages/
+
+# Output data files
+learning_outcomes.csv
+classified_learning_outcomes.csv
+
+# OS-specific files
+.DS_Store
+
+# Other common ignores
+*.swp
+*.swo 

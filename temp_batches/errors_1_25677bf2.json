@@ -1,0 +1,36 @@
+{
+  "id": "batch_6812f0ed8a5881908c57456f3c566ce0",
+  "completion_window": "24h",
+  "created_at": 1746071789,
+  "endpoint": "/v1/chat/completions",
+  "input_file_id": "file-8SiwappJ3AFLAxEd5vEBey",
+  "object": "batch",
+  "status": "failed",
+  "cancelled_at": null,
+  "cancelling_at": null,
+  "completed_at": null,
+  "error_file_id": null,
+  "errors": {
+    "data": [
+      {
+        "code": "token_limit_exceeded",
+        "line": null,
+        "message": "Enqueued token limit reached for gpt-4.1-mini-2025-04-14 in organization org-4uPgdxAFSDqYUJtZpiFInuO5. Limit: 2,000,000 enqueued tokens. Please try again once some in_progress batches have been completed.",
+        "param": null
+      }
+    ],
+    "object": "list"
+  },
+  "expired_at": null,
+  "expires_at": 1746158189,
+  "failed_at": 1746071790,
+  "finalizing_at": null,
+  "in_progress_at": null,
+  "metadata": null,
+  "output_file_id": null,
+  "request_counts": {
+    "completed": 0,
+    "failed": 0,
+    "total": 0
+  }
+}
