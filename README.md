@@ -16,42 +16,47 @@ The BYU Aims are:
 
 This project follows a multi-step workflow:
 
-1.  **Data Extraction (Scraping):** Gather course information and learning outcomes from the official BYU Course Catalog.
-2.  **Outcome Classification:** Use an AI model to classify each extracted learning outcome against the four BYU Aims.
-3.  **Data Analysis & Visualization:** Explore the classified data using an interactive dashboard.
+1.  **Data Extraction (Scraping):** Gather course information and learning outcomes from the official BYU Course Catalog using web scraping techniques.
+2.  **Data Cleaning:** Standardize and clean the raw scraped text data.
+3.  **Outcome Classification:** Use an AI model to classify each extracted learning outcome against the four BYU Aims.
+4.  **Data Analysis & Visualization:** Explore the classified data using an interactive dashboard.
 
 ### Step 1: Data Extraction (`course_scraper.py`)
 
-*   **Process:** The `course_scraper.py` script automates the collection of data from the BYU Course Catalog website.
-    *   It first identifies all course pages from the main catalog listings (e.g., `https://catalog.byu.edu/courses?page=1`).
-    *   It then visits each individual course page (e.g., `https://catalog.byu.edu/courses/01452-023`) to extract:
-        *   Course Name (e.g., CMLIT 420R)
-        *   Course Title (e.g., 12th-Century Renaissance)
-        *   Department
-        *   College
-        *   Stated Learning Outcomes (including title and details, if available).
-*   **Output:** The scraper saves the extracted data into a CSV file, typically `learning_outcomes.csv`. Each row represents a single learning outcome for a specific course. If a course has multiple learning outcomes, it results in multiple rows.
+*   **Process:** The `course_scraper.py` script automates data collection.
+    *   It likely uses tools like Selenium to fetch HTML content from individual course pages identified from the main catalog listings.
+    *   Downloads HTML pages locally (e.g., into `course_pages/`) for robust parsing.
+    *   Uses libraries like BeautifulSoup to parse the saved HTML, extracting: Course Name, Title, Department, College, and Learning Outcomes (title/details).
+    *   Assigns sequential IDs to outcomes within a course.
+*   **Output:** Saves the raw extracted data into a CSV file (e.g., `learning_outcomes.csv`).
 *   **Data Source URLs:**
     *   Main listing (paginated): `https://catalog.byu.edu/courses?page=1`, `https://catalog.byu.edu/courses?page=2`, etc.
     *   Individual course pages (example): `https://catalog.byu.edu/courses/01452-023`
 
-### Step 2: Outcome Classification (`classify_outcomes.py`)
+### Step 2: Data Cleaning (`clean_csv.py`)
 
-*   **Process:** After extracting the learning outcomes, the `classify_outcomes.py` script uses an AI model (specifically, OpenAI's GPT models accessed via API) to classify each learning outcome.
-    *   It takes the raw `learning_outcomes.csv` (or a specified input file) as input.
-    *   For each outcome, it combines the title and details (handling cases where one might be missing) and sends it to the OpenAI API.
-    *   A detailed system prompt guides the AI to evaluate the outcome against the definitions of the four BYU Aims (see `aims_of_a_BYU_education.md` for the detailed descriptions used in the prompt).
-    *   The script requests the AI to return confidence scores (0-100) for each of the four aims in a structured JSON format.
-*   **Output:** Saves the results, including the original course data, the confidence scores for each aim (`confidence_Aim_Name`), and a `best_aim` column (the aim with the highest score), to an output CSV file (defaults to `classified_learning_outcomes.csv`).
+*   **Process:** The `clean_csv.py` script takes the raw CSV output from the scraper and performs necessary cleaning.
+    *   Handles potential text encoding issues (e.g., UTF-8, Latin-1).
+    *   Removes extraneous line breaks, decodes HTML entities (e.g., `&amp;`), and standardizes whitespace.
+    *   Uses robust CSV parsing to handle potential formatting issues in the raw data.
+*   **Output:** Produces a cleaned CSV file (e.g., `data/learning_outcomes_cleaned.csv`) suitable for classification.
+
+### Step 3: Outcome Classification (`classify_outcomes_batch.py`)
+
+*   **Process:** The `classify_outcomes_batch.py` script classifies outcomes using an OpenAI GPT model.
+    *   Takes the *cleaned* CSV file as input.
+    *   Sends each outcome's text (title + details) along with a detailed system prompt to the OpenAI API. The prompt defines the BYU Aims and requests confidence scores (0-100) for each aim in JSON format.
+    *   Processes outcomes incrementally, saving progress frequently and handling potential API errors or rate limits.
+*   **Output:** Appends confidence scores (`confidence_Aim_Name`) and a `best_aim` column to the input data, saving the results to a final classified CSV file (e.g., `data/classified_learning_outcomes_cleaned.csv`).
 *   **Features:**
     *   Handles missing outcome titles or details.
-    *   Designed to resume processing if interrupted by checking the output file for already classified outcomes.
-    *   Supports command-line arguments for input/output files and save frequency (`python classify_outcomes.py --help`).
+    *   Designed for batch processing with resumption capabilities.
+    *   Supports command-line arguments (`python classify_outcomes_batch.py --help`).
 
-### Step 3: Data Analysis & Visualization (`dashboard.py`)
+### Step 4: Data Analysis & Visualization (`dashboard.py`)
 
-*   **Process:** An interactive web application built with Streamlit (`dashboard.py`) allows users to explore the classification results.
-*   **Input:** Reads the classified data, preferably from a cleaned version (`data/classified_learning_outcomes_cleaned.csv`), but can also process the direct output of the classifier. It includes logic to harmonize college names and filter out placeholder text or zero-confidence entries.
+*   **Process:** An interactive web application built with Streamlit (`dashboard.py`).
+*   **Input:** Reads the final *classified and cleaned* data file (e.g., `data/classified_learning_outcomes_cleaned.csv`). Includes logic to harmonize college names and filter out placeholders if necessary.
 *   **Features:**
     *   Displays overall aim distribution using interactive pie/donut charts.
     *   Allows filtering data by College and Department.
@@ -94,19 +99,24 @@ This project follows a multi-step workflow:
 5.  **Run the Workflow:**
     *   **Step 1: Scrape Data:**
         ```bash
-        python course_scraper.py # Or specify output: python course_scraper.py --output learning_outcomes.csv
+        python course_scraper.py --output learning_outcomes_raw.csv
         ```
-        *(Review `course_scraper.py --help` if available for options)*
-    *   **Step 2: Classify Outcomes:**
+        *(Adjust output filename as needed. Check script for options.)*
+    *   **Step 2: Clean Data:**
         ```bash
-        python classify_outcomes.py --input learning_outcomes.csv --output classified_learning_outcomes.csv
+        python clean_csv.py --input learning_outcomes_raw.csv --output data/learning_outcomes_cleaned.csv
         ```
-        *(Adjust input/output filenames as needed. Use `--help` for more options like save frequency.)*
-    *   **Step 3: Analyze Results:**
+        *(Adjust input/output filenames as needed. Check script for options.)*
+    *   **Step 3: Classify Outcomes:**
+        ```bash
+        python classify_outcomes_batch.py --input data/learning_outcomes_cleaned.csv --output data/classified_learning_outcomes_cleaned.csv
+        ```
+        *(Adjust input/output filenames. This might overwrite the cleaned file, or use a different output name depending on the script's goal. Use `--help` for details.)*
+    *   **Step 4: Analyze Results:**
         ```bash
         streamlit run dashboard.py
         ```
-        *(This will start the Streamlit server and open the dashboard in your web browser. Ensure the dashboard points to the correct classified data file, potentially `data/classified_learning_outcomes_cleaned.csv` after running a cleaning script if available, or the direct output like `classified_learning_outcomes.csv`)*
+        *(Ensure the dashboard (`DATA_FILE` constant) points to the final classified file, e.g., `data/classified_learning_outcomes_cleaned.csv`)*
 
 ## Future Enhancements
 
