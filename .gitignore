@@ -1,2 +1,8 @@
 course_pages/
 catalogue_pages/
+.env
+
+# Data directory - ignore contents except specific files
+data/*
+!data/classified_learning_outcomes_cleaned.csv
+!data/.keep
