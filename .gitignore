@@ -1,6 +1,7 @@
 course_pages/
 catalogue_pages/
 .env
+interactive_exploration.ipynb
 
 # Data directory - ignore contents except specific files
 data/*

@@ -109,8 +109,16 @@ def load_data(filepath):
         # Return None for df and 0 for counts on error
         return None, 0, 0 
 
+def read_blog_content():
+    """Read the blog content from blog_write_up.md"""
+    try:
+        with open('blog_write_up.md', 'r') as file:
+            return file.read()
+    except Exception as e:
+        return f"Error reading blog content: {e}"
+
 # --- Main App Layout ---
-st.set_page_config(layout="wide", page_title="Dashboard")
+st.set_page_config(layout="wide", page_title="BYU Learning Outcomes - Dashboard")
 st.title("Exploring the Coverage of BYU's Goals in Course Learning Outcomes")
 
 st.markdown("""
@@ -170,237 +178,182 @@ if df is not None:
     if filtered_df.empty:
         st.warning("No data available for the selected filters.")
     else:
-        # --- Create Tabs ---
-        tab1, tab2 = st.tabs(["Distribution Analysis", "High Confidence Examples"])
-
-        with tab1:
-            # --- Existing Content for Tab 1 ---
-            # Plot 1: Overall Distribution for the selection
-            st.subheader("Overall Aim Distribution")
-            aim_counts = filtered_df['best_aim'].value_counts().reindex(BYU_AIMS, fill_value=0)
-            fig_pie = px.pie(values=aim_counts.values, names=aim_counts.index, title="Primary Aim Classification",
-                             color=aim_counts.index, # Use index for color mapping
-                             color_discrete_map=AIM_COLORS,
-                             hole=0.4) # Add hole parameter for donut chart
-            st.plotly_chart(fig_pie, use_container_width=True)
+        # No tabs needed anymore - just display distribution analysis content directly
+        # --- Distribution Analysis Content ---
+        # Plot 1: Overall Distribution for the selection
+        st.subheader("Overall Aim Distribution")
+        aim_counts = filtered_df['best_aim'].value_counts().reindex(BYU_AIMS, fill_value=0)
+        fig_pie = px.pie(values=aim_counts.values, names=aim_counts.index, title="Primary Aim Classification",
+                         color=aim_counts.index, # Use index for color mapping
+                         color_discrete_map=AIM_COLORS,
+                         hole=0.4) # Add hole parameter for donut chart
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
+        # Display counts table, sorted by Count descending
+        aim_counts_df = aim_counts.reset_index().rename(columns={'index': 'Aim', 'best_aim': 'Count'})
+        st.dataframe(aim_counts_df.sort_values(by='Count', ascending=False))
+        
+        # Plot 2: Distribution by College (if 'All' colleges selected)
+        if selected_college == "All":
+            st.subheader("Distribution by College")
+            # Use the original unfiltered df for college comparison
+            # Calculate Percentage distribution
+            college_aim_dist = df.groupby('college')['best_aim'].value_counts(normalize=True).unstack(fill_value=0) * 100
+            college_aim_dist = college_aim_dist.reindex(columns=BYU_AIMS, fill_value=0)
             
-            # Display counts table, sorted by Count descending
-            aim_counts_df = aim_counts.reset_index().rename(columns={'index': 'Aim', 'best_aim': 'Count'})
-            st.dataframe(aim_counts_df.sort_values(by='Count', ascending=False))
+            # Calculate Total counts
+            college_counts = df['college'].value_counts().rename('Total Outcomes')
             
-            # Plot 2: Distribution by College (if 'All' colleges selected)
-            if selected_college == "All":
-                st.subheader("Distribution by College")
-                # Use the original unfiltered df for college comparison
-                # Calculate Percentage distribution
-                college_aim_dist = df.groupby('college')['best_aim'].value_counts(normalize=True).unstack(fill_value=0) * 100
-                college_aim_dist = college_aim_dist.reindex(columns=BYU_AIMS, fill_value=0)
-                
-                # Calculate Total counts
-                college_counts = df['college'].value_counts().rename('Total Outcomes')
-                
-                # Join counts and percentages
-                college_summary = college_aim_dist.join(college_counts)
-                # Ensure 'Total Outcomes' is the first column
-                cols_order = ['Total Outcomes'] + [col for col in college_summary.columns if col != 'Total Outcomes']
-                college_summary = college_summary[cols_order]
+            # Join counts and percentages
+            college_summary = college_aim_dist.join(college_counts)
+            # Ensure 'Total Outcomes' is the first column
+            cols_order = ['Total Outcomes'] + [col for col in college_summary.columns if col != 'Total Outcomes']
+            college_summary = college_summary[cols_order]
 
-                # Add sorting option, default to Intellectually Enlarging
-                sort_options = ["Alphabetical", "Total Outcomes"] + BYU_AIMS
-                # Find the index of the default value, handling potential absence
-                default_sort_option = "Intellectually Enlarging"
-                try:
-                    default_index = sort_options.index(default_sort_option)
-                except ValueError:
-                    default_index = 0 # Fallback to Alphabetical if not found
-                
-                sort_by_col = st.selectbox(
-                    "Sort Colleges by:", 
-                    sort_options, 
-                    index=default_index, # Set default selection
-                    key="college_sort_tab1" 
-                )
-
-                if sort_by_col == "Alphabetical":
-                     # Default sort is alphabetical by index (college name)
-                     college_summary_sorted = college_summary.sort_index()
-                elif sort_by_col in college_summary.columns:
-                    # Sort the DataFrame by the selected column's value, descending
-                    college_summary_sorted = college_summary.sort_values(by=sort_by_col, ascending=False)
-                else:
-                     # Fallback to alphabetical if somehow column is invalid
-                     college_summary_sorted = college_summary.sort_index()
-
-                # Melt the potentially sorted DataFrame for Plotly Express bar chart (use original percentages for melt)
-                # Need to sort the original percentage dist based on the summary sort order for the chart
-                college_aim_dist_sorted_for_chart = college_aim_dist.loc[college_summary_sorted.index]
-                college_aim_dist_melted = college_aim_dist_sorted_for_chart.reset_index().melt(id_vars='college', var_name='BYU Aim', value_name='Percentage (%)')
-
-                fig_college = px.bar(college_aim_dist_melted, # Use melted percentage data
-                                     x='college', y='Percentage (%)', color='BYU Aim',
-                                     barmode='stack', 
-                                     title="Percentage of Aims within Each College",
-                                     color_discrete_map=AIM_COLORS,
-                                     # Ensure the x-axis order respects the sorting
-                                     category_orders={"college": college_summary_sorted.index.tolist()})
-                fig_college.update_layout(yaxis_title="Percentage (%)", legend_title="BYU Aim", xaxis_title="College")
-                st.plotly_chart(fig_college, use_container_width=True)
-                
-                # Display the sorted summary table (counts + percentages)
-                # Define formatting for percentage columns only
-                format_dict = {aim: '{:.1f}%' for aim in BYU_AIMS}
-                st.dataframe(college_summary_sorted.style.format(format_dict))
-
-            # Plot 3: Distribution by Department (if a specific college is selected)
-            elif selected_college != "All" and selected_department == "All":
-                 st.subheader(f"Distribution by Department within {selected_college}")
-                 # Use filtered_df here as we only care about the selected college's departments
-                 dept_aim_dist = filtered_df.groupby('department')['best_aim'].value_counts(normalize=True).unstack(fill_value=0) * 100
-                 dept_aim_dist = dept_aim_dist.reindex(columns=BYU_AIMS, fill_value=0)
-                 # Melt the DataFrame
-                 dept_aim_dist_melted = dept_aim_dist.reset_index().melt(id_vars='department', var_name='BYU Aim', value_name='Percentage (%)')
-
-                 fig_dept = px.bar(dept_aim_dist_melted, # Use melted data
-                                 x='department', y='Percentage (%)', color='BYU Aim',
-                                 barmode='stack', # Changed from 'group' to 'stack' for consistency
-                                 title=f"Percentage of Aims within Departments of {selected_college}",
-                                 color_discrete_map=AIM_COLORS,
-                                 # Sort departments alphabetically for the chart
-                                 category_orders={"department": sorted(dept_aim_dist.index.tolist())})
-                 fig_dept.update_layout(yaxis_title="Percentage (%)", legend_title="BYU Aim", xaxis_title="Department")
-                 st.plotly_chart(fig_dept, use_container_width=True)
-                 # Add the table for department distribution
-                 st.dataframe(dept_aim_dist.sort_index().style.format("{:.1f}%"))
-                 
-            # --- Add Raw Data Table ---
-            st.subheader("Review Classified Data")
-            st.markdown("The table below shows the detailed classification data based on the current filters.")
-    
-            # Add the confidence score for the best aim
-            def get_best_aim_confidence(row):
-                aim_col = f"confidence_{row['best_aim'].replace(' ', '_')}"
-                if aim_col in row.index:
-                    return row[aim_col]
-                return None # Or pd.NA or 0, depending on desired handling
-
-            # Apply only if the column doesn't already exist (avoid re-calculation)
-            if 'best_aim_confidence' not in filtered_df.columns:
-                filtered_df['best_aim_confidence'] = filtered_df.apply(get_best_aim_confidence, axis=1)
-    
-            # Select and rename columns for clarity
-            display_cols = {
-                'course_name': 'Course Code',
-                'course_title': 'Course Title',
-                'course_url': 'Course URL',
-                'department': 'Department',
-                'college': 'College',
-                'learning_outcome_title': 'Outcome Title',
-                'learning_outcome_details': 'Outcome Details',
-                'best_aim': 'Best Aim',
-                'best_aim_confidence': 'Best Aim Confidence'
-            }
-            # Filter the DataFrame to only include the columns we want to display
-            # Ensure all display_cols exist in filtered_df before selecting
-            cols_to_select = [col for col in display_cols.keys() if col in filtered_df.columns]
-            # Create the display_df with selected and renamed columns *before* filtering by aim
-            table_display_df_unfiltered = filtered_df[cols_to_select].rename(columns=display_cols)
+            # Add sorting option, default to Intellectually Enlarging
+            sort_options = ["Alphabetical", "Total Outcomes"] + BYU_AIMS
+            # Find the index of the default value, handling potential absence
+            default_sort_option = "Intellectually Enlarging"
+            try:
+                default_index = sort_options.index(default_sort_option)
+            except ValueError:
+                default_index = 0 # Fallback to Alphabetical if not found
             
-            # --- Add Aim Filter for the Table ---
-            # Get available aims from the *currently filtered* data
-            available_aims = sorted(table_display_df_unfiltered['Best Aim'].dropna().unique())
-            
-            if available_aims:
-                selected_aims_for_table = st.multiselect(
-                    "Filter table by Best Aim:", 
-                    options=available_aims,
-                    default=available_aims, # Default to all available aims
-                    key="aim_filter_table"
-                )
-                
-                # Filter the DataFrame for the table based on multiselect
-                if selected_aims_for_table != available_aims: # Check if selection changed from default
-                     table_display_df = table_display_df_unfiltered[table_display_df_unfiltered['Best Aim'].isin(selected_aims_for_table)]
-                else:
-                    # If all are selected (or default), use the unfiltered display df
-                    table_display_df = table_display_df_unfiltered
-            else:
-                st.write("No aims available to filter in the current selection.")
-                table_display_df = table_display_df_unfiltered # Show empty table if no aims
-            
-            # --- Display the Filtered Table ---            
-            # Use st.data_editor for sortable columns, configure URL column as link
-            st.data_editor(
-                table_display_df, # Use the potentially filtered DataFrame
-                column_config={
-                    "Course URL": st.column_config.LinkColumn(
-                        "Course URL", # Column name in the DataFrame being displayed
-                        help="Click to open the BYU course catalog page",
-                        display_text="Open Catalog Page"
-                    )
-                },
-                use_container_width=True, 
-                hide_index=True
+            sort_by_col = st.selectbox(
+                "Sort Colleges by:", 
+                sort_options, 
+                index=default_index, # Set default selection
+                key="college_sort_tab1" 
             )
 
-        with tab2:
-            # --- New Content for Tab 2: High Confidence Examples ---
-            st.subheader(f"High Confidence Examples for: {selected_college} / {selected_department}")
-            st.markdown("Showing top 5 examples for each BYU Aim based on the highest confidence score, according to the filters.")
+            if sort_by_col == "Alphabetical":
+                 # Default sort is alphabetical by index (college name)
+                 college_summary_sorted = college_summary.sort_index()
+            elif sort_by_col in college_summary.columns:
+                # Sort the DataFrame by the selected column's value, descending
+                college_summary_sorted = college_summary.sort_values(by=sort_by_col, ascending=False)
+            else:
+                 # Fallback to alphabetical if somehow column is invalid
+                 college_summary_sorted = college_summary.sort_index()
 
-            # Use the already filtered_df based on sidebar selections
-            examples_df = filtered_df.copy()
+            # Melt the potentially sorted DataFrame for Plotly Express bar chart (use original percentages for melt)
+            # Need to sort the original percentage dist based on the summary sort order for the chart
+            college_aim_dist_sorted_for_chart = college_aim_dist.loc[college_summary_sorted.index]
+            college_aim_dist_melted = college_aim_dist_sorted_for_chart.reset_index().melt(id_vars='college', var_name='BYU Aim', value_name='Percentage (%)')
 
-            # Calculate best_aim_confidence if not already present
-            if 'best_aim_confidence' not in examples_df.columns:
-                examples_df['best_aim_confidence'] = examples_df.apply(get_best_aim_confidence, axis=1)
+            fig_college = px.bar(college_aim_dist_melted, # Use melted percentage data
+                                 x='college', y='Percentage (%)', color='BYU Aim',
+                                 barmode='stack', 
+                                 title="Percentage of Aims within Each College",
+                                 color_discrete_map=AIM_COLORS,
+                                 # Ensure the x-axis order respects the sorting
+                                 category_orders={"college": college_summary_sorted.index.tolist()})
+            fig_college.update_layout(yaxis_title="Percentage (%)", legend_title="BYU Aim", xaxis_title="College")
+            st.plotly_chart(fig_college, use_container_width=True)
+            
+            # Display the sorted summary table (counts + percentages)
+            # Define formatting for percentage columns only
+            format_dict = {aim: '{:.1f}%' for aim in BYU_AIMS}
+            st.dataframe(college_summary_sorted.style.format(format_dict))
 
-            # Ensure confidence column is numeric and drop rows where it's missing
-            examples_df['best_aim_confidence'] = pd.to_numeric(examples_df['best_aim_confidence'], errors='coerce')
-            examples_df.dropna(subset=['best_aim_confidence'], inplace=True) # Important for sorting
-            examples_df['best_aim_confidence'] = examples_df['best_aim_confidence'].astype(int)
+        # Plot 3: Distribution by Department (if a specific college is selected)
+        elif selected_college != "All" and selected_department == "All":
+             st.subheader(f"Distribution by Department within {selected_college}")
+             # Use filtered_df here as we only care about the selected college's departments
+             dept_aim_dist = filtered_df.groupby('department')['best_aim'].value_counts(normalize=True).unstack(fill_value=0) * 100
+             dept_aim_dist = dept_aim_dist.reindex(columns=BYU_AIMS, fill_value=0)
+             # Melt the DataFrame
+             dept_aim_dist_melted = dept_aim_dist.reset_index().melt(id_vars='department', var_name='BYU Aim', value_name='Percentage (%)')
 
-            for aim in BYU_AIMS:
-                st.markdown(f"#### Top Examples for: {aim}")
-                aim_col_name = f"confidence_{aim.replace(' ', '_')}"
-                
-                # Check if the specific confidence column exists
-                if aim_col_name not in examples_df.columns:
-                    st.warning(f"Confidence score column '{aim_col_name}' not found in data. Cannot show examples for {aim}.")
-                    continue
+             fig_dept = px.bar(dept_aim_dist_melted, # Use melted data
+                             x='department', y='Percentage (%)', color='BYU Aim',
+                             barmode='stack', # Changed from 'group' to 'stack' for consistency
+                             title=f"Percentage of Aims within Departments of {selected_college}",
+                             color_discrete_map=AIM_COLORS,
+                             # Sort departments alphabetically for the chart
+                             category_orders={"department": sorted(dept_aim_dist.index.tolist())})
+             fig_dept.update_layout(yaxis_title="Percentage (%)", legend_title="BYU Aim", xaxis_title="Department")
+             st.plotly_chart(fig_dept, use_container_width=True)
+             # Add the table for department distribution
+             st.dataframe(dept_aim_dist.sort_index().style.format("{:.1f}%"))
+             
+        # --- Add Raw Data Table ---
+        st.subheader("Review Classified Data")
+        st.markdown("The table below shows the detailed classification data based on the current filters.")
 
-                # Filter for the current aim AND ensure the specific confidence score is not null
-                aim_examples = examples_df[
-                    (examples_df['best_aim'] == aim) & 
-                    (examples_df[aim_col_name].notna())
-                ].copy() # Use copy to avoid SettingWithCopyWarning
+        # Add the confidence score for the best aim
+        def get_best_aim_confidence(row):
+            aim_col = f"confidence_{row['best_aim'].replace(' ', '_')}"
+            if aim_col in row.index:
+                return row[aim_col]
+            return None # Or pd.NA or 0, depending on desired handling
 
-                 # Convert the specific confidence column to numeric *before* sorting
-                aim_examples[aim_col_name] = pd.to_numeric(aim_examples[aim_col_name], errors='coerce')
-                aim_examples.dropna(subset=[aim_col_name], inplace=True) # Drop if conversion failed
-                
-                # Sort by the specific aim's confidence score
-                top_examples = aim_examples.sort_values(by=aim_col_name, ascending=False).head(5)
+        # Apply only if the column doesn't already exist (avoid re-calculation)
+        if 'best_aim_confidence' not in filtered_df.columns:
+            filtered_df['best_aim_confidence'] = filtered_df.apply(get_best_aim_confidence, axis=1)
 
-                if top_examples.empty:
-                    st.write("_No examples found for the current filters._")
-                else:
-                    # Select and display relevant columns
-                    display_cols_examples = {
-                        'course_name': 'Course Code',
-                        'learning_outcome_title': 'Outcome Title',
-                        'learning_outcome_details': 'Outcome Details',
-                         aim_col_name: f'{aim} Confidence' # Show the specific confidence
-                    }
-                    cols_to_display_examples = [col for col in display_cols_examples.keys() if col in top_examples.columns]
-                    st.dataframe(top_examples[cols_to_display_examples].rename(columns=display_cols_examples), hide_index=True)
+        # Select and rename columns for clarity
+        display_cols = {
+            'course_name': 'Course Code',
+            'course_title': 'Course Title',
+            'course_url': 'Course URL',
+            'department': 'Department',
+            'college': 'College',
+            'learning_outcome_title': 'Outcome Title',
+            'learning_outcome_details': 'Outcome Details',
+            'best_aim': 'Best Aim',
+            'best_aim_confidence': 'Best Aim Confidence'
+        }
+        # Filter the DataFrame to only include the columns we want to display
+        # Ensure all display_cols exist in filtered_df before selecting
+        cols_to_select = [col for col in display_cols.keys() if col in filtered_df.columns]
+        # Create the display_df with selected and renamed columns *before* filtering by aim
+        table_display_df_unfiltered = filtered_df[cols_to_select].rename(columns=display_cols)
+        
+        # --- Add Aim Filter for the Table ---
+        # Get available aims from the *currently filtered* data
+        available_aims = sorted(table_display_df_unfiltered['Best Aim'].dropna().unique())
+        
+        if available_aims:
+            selected_aims_for_table = st.multiselect(
+                "Filter table by Best Aim:", 
+                options=available_aims,
+                default=available_aims, # Default to all available aims
+                key="aim_filter_table"
+            )
+            
+            # Filter the DataFrame for the table based on multiselect
+            if selected_aims_for_table != available_aims: # Check if selection changed from default
+                 table_display_df = table_display_df_unfiltered[table_display_df_unfiltered['Best Aim'].isin(selected_aims_for_table)]
+            else:
+                # If all are selected (or default), use the unfiltered display df
+                table_display_df = table_display_df_unfiltered
+        else:
+            st.write("No aims available to filter in the current selection.")
+            table_display_df = table_display_df_unfiltered # Show empty table if no aims
+        
+        # --- Display the Filtered Table ---            
+        # Use st.data_editor for sortable columns, configure URL column as link
+        st.data_editor(
+            table_display_df, # Use the potentially filtered DataFrame
+            column_config={
+                "Course URL": st.column_config.LinkColumn(
+                    "Course URL", # Column name in the DataFrame being displayed
+                    help="Click to open the BYU course catalog page",
+                    display_text="Open Catalog Page"
+                )
+            },
+            use_container_width=True, 
+            hide_index=True
+        )
 
-        # --- Display Status Messages at the Bottom ---
-        if num_removed_placeholders > 0:
-            st.info(f"Excluded {num_removed_placeholders} rows containing placeholder text (e.g., 'No learning outcomes found') from analysis.")
-        if num_removed_zeros > 0:
-            st.info(f"Excluded {num_removed_zeros} rows with zero confidence scores across all aims.")
-        # Display success message 
-        st.success(f"Loaded {len(df)} classified learning outcomes from {os.path.basename(data_path)}.")
+    # --- Display Status Messages at the Bottom ---
+    if num_removed_placeholders > 0:
+        st.info(f"Excluded {num_removed_placeholders} rows containing placeholder text (e.g., 'No learning outcomes found') from analysis.")
+    if num_removed_zeros > 0:
+        st.info(f"Excluded {num_removed_zeros} rows with zero confidence scores across all aims.")
+    # Display success message 
+    st.success(f"Loaded {len(df)} classified learning outcomes from {os.path.basename(data_path)}.")
 
 else:
     st.warning("Could not load data. Cannot display dashboard.")
