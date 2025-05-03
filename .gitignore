@@ -5,4 +5,5 @@ catalogue_pages/
 # Data directory - ignore contents except specific files
 data/*
 !data/classified_learning_outcomes_cleaned.csv
+!data/course_urls.txt
 !data/.keep
