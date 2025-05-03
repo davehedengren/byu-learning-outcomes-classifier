@@ -55,20 +55,61 @@ def load_data(filepath):
         else:
              print("Warning: 'college' column not found.")
 
-        # --- Basic Filtering (Ensure essential columns exist) ---
-        # Unlike the main dashboard, we DON'T filter out placeholders or zero scores here
-        # as we want to analyze the full content of the final classified file.
-        # However, we need core columns for analysis.
-        required_cols = ['course_url', 'learning_outcome_title', 'learning_outcome_details']
-        if not all(col in df.columns for col in required_cols):
-            st.error(f"Data file {filepath} is missing required columns for coverage analysis (e.g., course_url, outcome title/details).")
-            # Keep potentially incomplete df for partial analysis if possible
-            # return None
+        # --- Filter out invalid rows (Placeholder, Zero Confidence, NaN Confidence) ---
+        # Filter out rows where learning_outcome_details indicates no actual outcome
+        no_outcome_text = "No learning outcomes found"
+        discontinued_text = "This course is being discontinued so no learning outcomes will be listed."
+        filter_texts = [no_outcome_text, discontinued_text]
+        filter_pattern = '|'.join(filter_texts) # Create a regex pattern
 
-        # Ensure outcome columns are strings for length calculation
+        rows_to_remove_placeholders = df[
+            (df['learning_outcome_details'].astype(str).str.contains(filter_pattern, case=False, na=False, regex=True)) |
+            (df['learning_outcome_title'].astype(str).str.contains(filter_pattern, case=False, na=False, regex=True))
+        ]
+        if not rows_to_remove_placeholders.empty:
+            num_removed_placeholders = len(rows_to_remove_placeholders)
+            df = df.drop(rows_to_remove_placeholders.index)
+            print(f"Coverage: Filtered {num_removed_placeholders} placeholder/discontinued rows.")
+
+        # Identify confidence columns
+        confidence_cols = []
+        for aim in BYU_AIMS:
+            col_name = f"confidence_{aim.replace(' ', '_')}"
+            if col_name in df.columns:
+                df[col_name] = pd.to_numeric(df[col_name], errors='coerce') # Coerce errors to NaN first
+                confidence_cols.append(col_name)
+            else:
+                 print(f"Coverage Warning: Confidence column '{col_name}' not found.")
+
+        # Drop rows with NaN values in the confidence columns AFTER coercing
+        if confidence_cols:
+            rows_before_nan_drop = len(df)
+            df = df.dropna(subset=confidence_cols)
+            num_removed_nan = rows_before_nan_drop - len(df)
+            if num_removed_nan > 0:
+                print(f"Coverage: Filtered {num_removed_nan} rows with NaN confidence values.")
+
+            # Filter out rows where all confidence scores are zero AFTER handling NaNs
+            rows_before_zero_filter = len(df)
+            zero_confidence_mask = (df[confidence_cols].sum(axis=1) == 0)
+            df = df[~zero_confidence_mask]
+            num_removed_zeros = rows_before_zero_filter - len(df)
+            if num_removed_zeros > 0:
+                print(f"Coverage: Filtered {num_removed_zeros} rows with all zero confidence scores.")
+
+        # --- Basic Filtering Check (Ensure essential columns exist after filtering) ---
+        required_cols = ['course_url', 'learning_outcome_title', 'learning_outcome_details']
+        if df.empty:
+            st.error("No valid data remaining after filtering for coverage analysis.")
+            return None
+        if not all(col in df.columns for col in required_cols):
+            st.error(f"Data file {filepath} is missing required columns after filtering for coverage analysis.")
+            # Return potentially incomplete df for partial analysis if possible
+            # return None # Keep df even if cols missing, error is shown
+
+        # Ensure outcome columns are strings for length calculation (do this AFTER filtering)
         df['learning_outcome_title'] = df['learning_outcome_title'].astype(str)
         df['learning_outcome_details'] = df['learning_outcome_details'].astype(str)
-
 
         # --- Add Combined Outcome Text and Length ---
         # Handle potential NaN implicitly converted to 'nan' string by astype(str)
