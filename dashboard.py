@@ -111,7 +111,7 @@ def load_data(filepath):
 
 # --- Main App Layout ---
 st.set_page_config(layout="wide", page_title="Dashboard")
-st.title("Exploring BYU Goals in Course Learning Outcomes")
+st.title("Exploring the Coverage of BYU's Goals in Course Learning Outcomes")
 
 st.markdown("""
 Brigham Young University operates under a broader charter than traditional universities. 
