@@ -27,6 +27,9 @@ DEFAULT_MODEL = "gpt-4.1-mini" # Or choose another capable model
 DEFAULT_OUTPUT_FILE = "classified_learning_outcomes_cleaned_with_suggested_aims.csv"
 PROMPT_TEMPLATE_DIR = "prompt_templates"
 
+# --- Define Confidence Columns ---
+CONFIDENCE_COLS = [f"confidence_{aim.replace(' ', '_')}" for aim in BYU_AIMS]
+
 # --- Parse Command-line Arguments ---
 parser = argparse.ArgumentParser(description="Suggest additional BYU learning outcomes based on existing ones and non-modal Aims.")
 parser.add_argument("--input", type=str, default="data/classified_learning_outcomes_cleaned.csv",
@@ -35,7 +38,8 @@ parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT_FILE,
                     help=f"Output CSV file to save suggestions (default: {DEFAULT_OUTPUT_FILE})")
 parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
                     help=f"OpenAI model to use for suggestions (default: {DEFAULT_MODEL})")
-# Add arguments for resuming/batching later if needed
+parser.add_argument("--limit", type=int, default=-1,
+                    help="Limit processing to the first N courses (for testing, default: -1, process all)")
 args = parser.parse_args()
 
 # --- Load API Key ---
@@ -105,26 +109,61 @@ def aggregate_course_data(group):
     })
 
 def preprocess_data(input_path):
-    """Loads data and aggregates it by course."""
+    """Loads data, filters out unusable rows, and aggregates it by course."""
     print(f"Loading and preprocessing data from {input_path}...")
     try:
         df = pd.read_csv(input_path)
         print(f"Loaded {len(df)} rows.")
 
-        # Check for essential columns
-        required_cols = ['course_url', 'best_aim', 'learning_outcome_title', 'learning_outcome_details', 'course_name', 'course_title']
+        # Check for essential columns (including confidence for filtering)
+        required_cols = ['course_url', 'best_aim', 'learning_outcome_title', 'learning_outcome_details', 'course_name', 'course_title'] + CONFIDENCE_COLS
         if not all(col in df.columns for col in required_cols):
             missing = [col for col in required_cols if col not in df.columns]
             print(f"Error: Input CSV missing required columns: {missing}")
             return None
 
-        # Group by course URL and apply aggregation
-        # Make sure NaNs in best_aim don't break mode calculation
-        df['best_aim'].fillna('Unknown', inplace=True)
+        # --- Pre-filtering --- #
+        initial_rows = len(df)
 
-        courses_summary_df = df.groupby('course_url').apply(aggregate_course_data).reset_index()
+        # 1. Filter out placeholder text rows (similar to dashboard.py)
+        no_outcome_text = "No learning outcomes found"
+        discontinued_text = "This course is being discontinued"
+        filter_pattern = f'{no_outcome_text}|{discontinued_text}'
+        # Check in both details and title (case-insensitive)
+        placeholder_rows_mask = (
+            df['learning_outcome_details'].astype(str).str.contains(filter_pattern, case=False, na=False, regex=True) |
+            df['learning_outcome_title'].astype(str).str.contains(filter_pattern, case=False, na=False, regex=True)
+        )
+        df_filtered = df[~placeholder_rows_mask].copy() # Use .copy() to avoid SettingWithCopyWarning
+        num_removed_placeholders = initial_rows - len(df_filtered)
+        if num_removed_placeholders > 0:
+            print(f"Filtered out {num_removed_placeholders} rows containing placeholder text.")
 
-        print(f"Preprocessing complete. Aggregated into {len(courses_summary_df)} courses.")
+        # 2. Filter out rows with all zero confidence scores
+        # Convert confidence columns to numeric, coercing errors to NaN
+        for col in CONFIDENCE_COLS:
+            df_filtered[col] = pd.to_numeric(df_filtered[col], errors='coerce')
+        # Fill NaN with 0 for the sum check
+        df_filtered[CONFIDENCE_COLS] = df_filtered[CONFIDENCE_COLS].fillna(0)
+        # Keep rows where the sum of confidence scores is NOT zero
+        rows_before_zero_filter = len(df_filtered)
+        df_filtered = df_filtered[df_filtered[CONFIDENCE_COLS].sum(axis=1) != 0]
+        num_removed_zeros = rows_before_zero_filter - len(df_filtered)
+        if num_removed_zeros > 0:
+             print(f"Filtered out {num_removed_zeros} rows with zero confidence scores across all aims.")
+
+        if df_filtered.empty:
+            print("No valid outcome rows remaining after filtering. Cannot proceed.")
+            return None
+
+        print(f"Proceeding with {len(df_filtered)} rows after filtering.")
+        # --- End Pre-filtering --- #
+
+        # Group by course URL and apply aggregation *on the filtered data*
+        df_filtered['best_aim'].fillna('Unknown', inplace=True)
+        courses_summary_df = df_filtered.groupby('course_url').apply(aggregate_course_data).reset_index()
+
+        print(f"Preprocessing complete. Aggregated into {len(courses_summary_df)} courses with valid outcomes.")
         return courses_summary_df
 
     except FileNotFoundError:
@@ -211,18 +250,22 @@ def get_suggestions_for_course(client: OpenAI, jinja_env: Environment, course_in
 def main():
     print("Starting learning outcome suggestion process...")
     print(f"Input file: {args.input}")
-    print(f"Output file: {args.output}")
+    if args.limit > 0:
+        print(f"Output: Printing results for first {args.limit} course(s) to console.")
+    else:
+        print(f"Output file: {args.output}")
     print(f"Using model: {args.model}")
+    if args.limit > 0:
+        print(f"LIMIT MODE: Processing only first {args.limit} course(s)." )
 
-    # Load API Key
     try:
         api_key = load_api_key()
         client = OpenAI(api_key=api_key)
-        jinja_env = setup_jinja_env() # Setup Jinja env
-        aim_definitions = load_aim_definitions() # Load definitions
+        jinja_env = setup_jinja_env()
+        aim_definitions = load_aim_definitions()
         print("OpenAI client and helper functions initialized successfully.")
-    except ValueError as e:
-        print(f"Error: {e}")
+    except Exception as e:
+        print(f"Initialization Error: {e}")
         return
 
     # 1. Preprocess Data
@@ -231,58 +274,66 @@ def main():
         print("Failed to preprocess data or data is empty. Exiting.")
         return
 
-    # 2. Get Suggestions (Iterate through courses)
-    all_results = [] # Store combined course info + suggestions
-    total_courses = len(courses_summary_df)
-    print(f"\nFound {total_courses} unique courses to process.")
+    # 2. Get Suggestions (Iterate through courses, potentially limited)
+    all_results = []
+    total_to_process = args.limit if args.limit > 0 else len(courses_summary_df)
+    if args.limit > 0 and args.limit < len(courses_summary_df):
+         process_df = courses_summary_df.head(args.limit)
+         print(f"\nProcessing first {total_to_process} out of {len(courses_summary_df)} total courses.")
+    else:
+        process_df = courses_summary_df
+        total_to_process = len(courses_summary_df)
+        print(f"\nFound {total_to_process} unique courses to process.")
 
-    # Actual loop
-    for i, course_info in courses_summary_df.iterrows():
-        print(f"\nProcessing course {i+1}/{total_courses}...")
-        # Pass jinja_env and aim_definitions to the function
+    for i, course_info in process_df.iterrows():
+        print(f"\nProcessing course {i+1}/{total_to_process}...")
         suggestions = get_suggestions_for_course(client, jinja_env, course_info, args.model, aim_definitions)
 
-        # Combine course_info (as dict) with suggestions dictionary
         course_result = course_info.to_dict()
-        course_result.update(suggestions) # Add suggestions to the course data
+        course_result.update(suggestions)
         all_results.append(course_result)
-
-        # Consider adding progress saving logic here for long runs
 
     print(f"\nFinished processing {len(all_results)} courses.")
 
-    # 3. Format and Save Output
+    # 3. Format and Save/Print Output
     if all_results:
-        final_df = pd.DataFrame(all_results)
+        # If limit is set, just print the raw results
+        if args.limit > 0:
+            print("\n--- RESULTS (LIMIT MODE) ---")
+            for result in all_results:
+                print(json.dumps(result, indent=2))
+            print("--------------------------")
+        else:
+            # Format for CSV saving
+            final_df = pd.DataFrame(all_results)
+            # Define final column structure and order
+            # Start with original course info columns
+            output_columns = list(courses_summary_df.columns)
+            # Add columns for suggestions (3 for each non-modal aim)
+            for aim in BYU_AIMS:
+                aim_key_base = f"suggested_{aim.replace(' ', '_')}"
+                # Check if this aim's suggestions exist in *any* result row
+                # This handles cases where a course might only have 1 or 2 non-modal aims
+                if any(aim_key_base in d for d in all_results):
+                     # Unpack list into separate columns, handle potential missing suggestions
+                     for j in range(3):
+                        col_name = f"{aim_key_base}_{j+1}"
+                        output_columns.append(col_name)
+                        # Apply lambda to safely extract suggestion, default to empty string
+                        final_df[col_name] = final_df[aim_key_base].apply(lambda x: x[j] if isinstance(x, list) and len(x) > j else "")
+                     # Remove the original list column if desired
+                     if aim_key_base in final_df.columns:
+                         final_df = final_df.drop(columns=[aim_key_base])
 
-        # Define final column structure and order
-        # Start with original course info columns
-        output_columns = list(courses_summary_df.columns)
-        # Add columns for suggestions (3 for each non-modal aim)
-        for aim in BYU_AIMS:
-            aim_key_base = f"suggested_{aim.replace(' ', '_')}"
-            # Check if this aim's suggestions exist in *any* result row
-            # This handles cases where a course might only have 1 or 2 non-modal aims
-            if any(aim_key_base in d for d in all_results):
-                 # Unpack list into separate columns, handle potential missing suggestions
-                 for j in range(3):
-                    col_name = f"{aim_key_base}_{j+1}"
-                    output_columns.append(col_name)
-                    # Apply lambda to safely extract suggestion, default to empty string
-                    final_df[col_name] = final_df[aim_key_base].apply(lambda x: x[j] if isinstance(x, list) and len(x) > j else "")
-                 # Remove the original list column if desired
-                 if aim_key_base in final_df.columns:
-                     final_df = final_df.drop(columns=[aim_key_base])
+            # Ensure only existing columns are selected and ordered
+            final_output_columns = [col for col in output_columns if col in final_df.columns]
+            final_df = final_df[final_output_columns]
 
-        # Ensure only existing columns are selected and ordered
-        final_output_columns = [col for col in output_columns if col in final_df.columns]
-        final_df = final_df[final_output_columns]
-
-        try:
-            final_df.to_csv(args.output, index=False, encoding='utf-8')
-            print(f"\nSuccessfully saved suggestions to {args.output}")
-        except Exception as e:
-            print(f"Error saving results to {args.output}: {e}")
+            try:
+                final_df.to_csv(args.output, index=False, encoding='utf-8')
+                print(f"\nSuccessfully saved suggestions to {args.output}")
+            except Exception as e:
+                print(f"Error saving results to {args.output}: {e}")
     else:
         print("No suggestions were generated or processed.")
 

@@ -5,8 +5,11 @@
 
 **Data Pre-processing:**
 - [x] Load `classified_learning_outcomes_cleaned.csv` (or specified input).
+- [x] Add pre-filtering step:
+    - [x] Filter out rows matching placeholder text (e.g., "No learning outcomes found").
+    - [x] Filter out rows with zero confidence scores across all aims.
 - [x] Combine `learning_outcome_title` and `learning_outcome_details` into `full_outcome_text` if not already done during loading.
-- [x] Group the DataFrame by `course_url`.
+- [x] Group the filtered DataFrame by `course_url`.
 - [x] Define a function to apply to each course group:
     - [x] Determine the modal `best_aim` for the group (handle ties, e.g., take the first mode).
     - [x] Concatenate all `full_outcome_text` within the group, separated by newlines (`\n`).
