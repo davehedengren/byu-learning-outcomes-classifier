@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from collections import Counter
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import traceback
+from datetime import datetime # Added for timestamp
 
 # --- Constants ---
 BYU_AIMS = [
@@ -24,7 +25,8 @@ AIM_DEFINITIONS = {
     "Lifelong Learning and Service": "Focuses on instilling a love of learning, preparing for self-education, developing a desire to serve others and society."
 }
 DEFAULT_MODEL = "gpt-4.1-mini" # Or choose another capable model
-DEFAULT_OUTPUT_FILE = "classified_learning_outcomes_cleaned_with_suggested_aims.csv"
+# Changed default output path to data/ directory
+DEFAULT_OUTPUT_FILE = "data/classified_learning_outcomes_cleaned_with_suggested_aims.csv"
 PROMPT_TEMPLATE_DIR = "prompt_templates"
 
 # --- Define Confidence Columns ---
@@ -35,11 +37,13 @@ parser = argparse.ArgumentParser(description="Suggest additional BYU learning ou
 parser.add_argument("--input", type=str, default="data/classified_learning_outcomes_cleaned.csv",
                     help="Input CSV file containing classified learning outcomes (default: data/classified_learning_outcomes_cleaned.csv)")
 parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT_FILE,
-                    help=f"Output CSV file to save suggestions (default: {DEFAULT_OUTPUT_FILE})")
+                    help=f"Output CSV file path (default: {DEFAULT_OUTPUT_FILE}). If --limit is used, this is the base name for the timestamped sample file.")
 parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
                     help=f"OpenAI model to use for suggestions (default: {DEFAULT_MODEL})")
 parser.add_argument("--limit", type=int, default=-1,
-                    help="Limit processing to the first N courses (for testing, default: -1, process all)")
+                    help="Process a random sample of N courses (for testing, default: -1, process all). Saves output to a timestamped file in the same directory as --output.")
+parser.add_argument("--random_state", type=int, default=42,
+                    help="Random state for sampling (for reproducibility, default: 42)")
 args = parser.parse_args()
 
 # --- Load API Key ---
@@ -250,13 +254,27 @@ def get_suggestions_for_course(client: OpenAI, jinja_env: Environment, course_in
 def main():
     print("Starting learning outcome suggestion process...")
     print(f"Input file: {args.input}")
-    if args.limit > 0:
-        print(f"Output: Printing results for first {args.limit} course(s) to console.")
-    else:
-        print(f"Output file: {args.output}")
     print(f"Using model: {args.model}")
-    if args.limit > 0:
-        print(f"LIMIT MODE: Processing only first {args.limit} course(s)." )
+
+    # --- Determine Output Filename --- #
+    output_path = args.output
+    is_sampling = args.limit > 0
+
+    if is_sampling:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.dirname(output_path)
+        base_filename = os.path.basename(output_path)
+        sample_filename = f"sample_{timestamp}_{base_filename}"
+        output_path = os.path.join(output_dir, sample_filename)
+        print(f"SAMPLE MODE: Processing random sample of {args.limit} course(s) with random_state={args.random_state}." )
+        print(f"Output will be saved to: {output_path}")
+    else:
+        print(f"Output file: {output_path}")
+        # Ensure output directory exists
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            print(f"Created output directory: {output_dir}")
 
     try:
         api_key = load_api_key()
@@ -274,66 +292,63 @@ def main():
         print("Failed to preprocess data or data is empty. Exiting.")
         return
 
-    # 2. Get Suggestions (Iterate through courses, potentially limited)
+    # 2. Get Suggestions (Apply sampling if limit is set)
     all_results = []
-    total_to_process = args.limit if args.limit > 0 else len(courses_summary_df)
-    if args.limit > 0 and args.limit < len(courses_summary_df):
-         process_df = courses_summary_df.head(args.limit)
-         print(f"\nProcessing first {total_to_process} out of {len(courses_summary_df)} total courses.")
+    total_courses_available = len(courses_summary_df)
+    if args.limit > 0 and args.limit < total_courses_available:
+        print(f"\nRandomly sampling {args.limit} out of {total_courses_available} available courses..." )
+        process_df = courses_summary_df.sample(n=args.limit, random_state=args.random_state)
+        total_to_process = len(process_df)
+    elif args.limit > 0:
+        print(f"\nLimit ({args.limit}) >= total available courses ({total_courses_available}). Processing all available courses.")
+        process_df = courses_summary_df
+        total_to_process = total_courses_available
     else:
         process_df = courses_summary_df
-        total_to_process = len(courses_summary_df)
+        total_to_process = total_courses_available
         print(f"\nFound {total_to_process} unique courses to process.")
 
-    for i, course_info in process_df.iterrows():
-        print(f"\nProcessing course {i+1}/{total_to_process}...")
+    # Iterate through the selected (potentially sampled) DataFrame
+    for i, (index, course_info) in enumerate(process_df.iterrows()):
+        print(f"\nProcessing course {i+1}/{total_to_process} (Index: {index})...")
         suggestions = get_suggestions_for_course(client, jinja_env, course_info, args.model, aim_definitions)
-
         course_result = course_info.to_dict()
         course_result.update(suggestions)
         all_results.append(course_result)
 
     print(f"\nFinished processing {len(all_results)} courses.")
 
-    # 3. Format and Save/Print Output
+    # 3. Format and Save Output
     if all_results:
-        # If limit is set, just print the raw results
-        if args.limit > 0:
-            print("\n--- RESULTS (LIMIT MODE) ---")
-            for result in all_results:
-                print(json.dumps(result, indent=2))
-            print("--------------------------")
-        else:
-            # Format for CSV saving
-            final_df = pd.DataFrame(all_results)
-            # Define final column structure and order
-            # Start with original course info columns
-            output_columns = list(courses_summary_df.columns)
-            # Add columns for suggestions (3 for each non-modal aim)
-            for aim in BYU_AIMS:
-                aim_key_base = f"suggested_{aim.replace(' ', '_')}"
-                # Check if this aim's suggestions exist in *any* result row
-                # This handles cases where a course might only have 1 or 2 non-modal aims
-                if any(aim_key_base in d for d in all_results):
-                     # Unpack list into separate columns, handle potential missing suggestions
-                     for j in range(3):
-                        col_name = f"{aim_key_base}_{j+1}"
-                        output_columns.append(col_name)
-                        # Apply lambda to safely extract suggestion, default to empty string
-                        final_df[col_name] = final_df[aim_key_base].apply(lambda x: x[j] if isinstance(x, list) and len(x) > j else "")
-                     # Remove the original list column if desired
-                     if aim_key_base in final_df.columns:
-                         final_df = final_df.drop(columns=[aim_key_base])
+        # Format for CSV saving
+        final_df = pd.DataFrame(all_results)
+        output_columns = list(courses_summary_df.columns) # Use original summary cols as base
+        for aim in BYU_AIMS:
+            aim_key_base = f"suggested_{aim.replace(' ', '_')}"
+            if any(aim_key_base in d for d in all_results):
+                 for j in range(3):
+                    col_name = f"{aim_key_base}_{j+1}"
+                    output_columns.append(col_name)
+                    # Use .get() on dict within lambda for safer access
+                    final_df[col_name] = final_df[aim_key_base].apply(
+                        lambda x: x[j] if isinstance(x, list) and len(x) > j else (
+                            x.get(j, "") if isinstance(x, dict) else "" # Handle if suggestions are dicts or missing keys
+                        )
+                    )
+                 # Drop original list/dict column if it exists
+                 if aim_key_base in final_df.columns:
+                     final_df = final_df.drop(columns=[aim_key_base])
+        final_output_columns = [col for col in output_columns if col in final_df.columns]
+        # Ensure no duplicate columns before selecting
+        final_output_columns = list(dict.fromkeys(final_output_columns))
+        final_df = final_df[final_output_columns]
 
-            # Ensure only existing columns are selected and ordered
-            final_output_columns = [col for col in output_columns if col in final_df.columns]
-            final_df = final_df[final_output_columns]
-
-            try:
-                final_df.to_csv(args.output, index=False, encoding='utf-8')
-                print(f"\nSuccessfully saved suggestions to {args.output}")
-            except Exception as e:
-                print(f"Error saving results to {args.output}: {e}")
+        # Always save to the determined output_path
+        try:
+            final_df.to_csv(output_path, index=False, encoding='utf-8')
+            print(f"\nSuccessfully saved suggestions to {output_path}")
+        except Exception as e:
+            print(f"Error saving results to {output_path}: {e}")
     else:
         print("No suggestions were generated or processed.")
 

@@ -46,5 +46,8 @@
 
 **Final Steps:**
 - [ ] Add docstrings and comments.
-- [ ] Test the script.
-- [ ] Commit `suggest_outcomes.py`, `TODO-suggestions.md`, and `prompt_templates/` directory. 
+- [x] Test the script (ran samples with different models, saved output).
+- [ ] Commit `suggest_outcomes.py` and `TODO-suggestions.md`. 
+
+
+
