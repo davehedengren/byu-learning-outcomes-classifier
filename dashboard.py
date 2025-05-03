@@ -110,7 +110,7 @@ def load_data(filepath):
         return None, 0, 0 
 
 # --- Main App Layout ---
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Dashboard")
 st.title("BYU Learning Outcomes Aims Distribution")
 
 # Load data - Prioritize final, then raw batch, then dummy
