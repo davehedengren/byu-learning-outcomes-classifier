@@ -84,8 +84,15 @@ def load_data(filepath):
         # --- Filter out rows where all confidence scores are zero ---
         if confidence_cols: # Only filter if we found confidence columns
             rows_before_zero_filter = len(df)
-            # Fill NA in confidence columns with 0 *before* summing for the check
-            df[confidence_cols] = df[confidence_cols].fillna(0)
+            # --- Filter out rows with NaN or Zero confidence ---
+            # 1. Drop rows with any NaN in confidence columns first
+            rows_before_nan_drop = len(df)
+            df = df.dropna(subset=confidence_cols)
+            num_removed_nan = rows_before_nan_drop - len(df)
+            if num_removed_nan > 0:
+                 print(f"Dashboard: Filtered {num_removed_nan} rows with NaN confidence values.")
+
+            # 2. Filter out rows where the sum of confidence scores is zero AFTER handling NaNs
             # Select rows where the sum of confidence scores is NOT zero
             df = df[df[confidence_cols].sum(axis=1) != 0]
             num_removed_zeros = rows_before_zero_filter - len(df)
