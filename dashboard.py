@@ -113,6 +113,23 @@ def load_data(filepath):
 st.set_page_config(layout="wide", page_title="Dashboard")
 st.title("BYU Learning Outcomes Aims Distribution")
 
+st.markdown("""
+Brigham Young University operates under a broader charter than traditional universities. 
+In addition to fostering intellectual growth, BYU's mission emphasizes four distinct aims: 
+a BYU education should be:
+1.  Spiritually strengthening,
+2.  Intellectually enlarging,
+3.  Character building, leading to
+4.  Lifelong learning and service.
+([Source: Aims of a BYU Education](https://catalog.byu.edu/about/aims-of-a-byu-education))
+
+However, an analysis of course-level learning objectives across the entire BYU catalog reveals that over 90% focus primarily on intellectual development. 
+This suggests a meaningful opportunity to better integrate the university's other aims into the classroom experience. 
+As Elder Jeffrey R. Holland taught, "BYU will realize President Kimball's vision only to the degree it embraces its uniqueness, its singularity. . . . We must have the will to be different and to stand alone, if necessary, being a university second to none in its role primarily as an undergraduate teaching institution that is unequivocally true to the gospel of the Lord Jesus Christ." 
+([Source: The Second Half of the Second Century of Brigham Young University](https://speeches.byu.edu/talks/jeffrey-r-holland/the-second-half-second-century-brigham-young-university/))
+""")
+st.divider() # Add a visual separator
+
 # Load data - Prioritize final, then raw batch, then dummy
 if os.path.exists(DATA_FILE):
     data_path = DATA_FILE
