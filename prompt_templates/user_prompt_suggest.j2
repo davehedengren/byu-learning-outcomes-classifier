@@ -1,0 +1,13 @@
+Course Details:
+*   Name: {{ course_info.course_name }}
+*   Title: {{ course_info.course_title }}
+*   Department: {{ course_info.department }}
+*   College: {{ course_info.college }}
+
+Existing Learning Outcomes for this course (separated by ---):
+---
+{{ course_info.all_existing_outcomes }}
+---
+
+Based on the course details and existing outcomes, please suggest three **new and distinct** learning outcomes that specifically target the **{{ target_aim }}** Aim of a BYU Education.
+Provide your response in the specified JSON format as instructed in the system prompt. 
