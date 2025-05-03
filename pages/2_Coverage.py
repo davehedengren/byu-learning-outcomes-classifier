@@ -150,6 +150,38 @@ if df is not None and not df.empty:
         st.plotly_chart(fig_hist, use_container_width=True)
         st.dataframe(outcomes_per_course.describe(), use_container_width=True)
 
+        # --- Add Detailed Course Outcome Count Table ---
+        st.subheader("Course Outcome Counts (Detailed)")
+        # Check for necessary columns
+        course_detail_cols = ['course_url', 'course_name', 'course_title']
+        if all(col in df.columns for col in course_detail_cols):
+            # Group by course details and count outcomes
+            course_counts_detailed = df.groupby(course_detail_cols).size().reset_index(name='outcome_count')
+
+            # Sort by outcome count descending
+            course_counts_sorted = course_counts_detailed.sort_values(by='outcome_count', ascending=False)
+
+            # Select and rename columns for display
+            display_cols_counts = {
+                'course_name': 'Course Code',
+                'course_title': 'Course Title',
+                'course_url': 'Course URL',
+                'outcome_count': 'Number of Outcomes'
+            }
+            # Ensure all expected columns are present before renaming/selecting
+            cols_to_display = [col for col in display_cols_counts.keys() if col in course_counts_sorted.columns]
+
+            st.dataframe(
+                course_counts_sorted[cols_to_display].rename(columns=display_cols_counts),
+                column_config={
+                    "Course URL": st.column_config.LinkColumn("Course URL", display_text="Open Catalog")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.warning("Could not display detailed course counts because 'course_name' or 'course_title' columns are missing.")
+
         st.divider()
 
         # --- Length Analysis ---
