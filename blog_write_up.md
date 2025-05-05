@@ -6,7 +6,7 @@
     * 3.5% focus on "Character Building".
     * 4.4% focus on "Lifelong Learning and Service".
 * 7 colleges have more than 90% of their objectives on Intellectual Enlargement.
-* 42 departments have more than 90% of their objectives on Intellectual Enlargement.
+* 40 departments have more than 90% of their objectives on Intellectual Enlargement.
 
 # Context
 Brigham Young University operates under a broader charter than traditional universities. 
