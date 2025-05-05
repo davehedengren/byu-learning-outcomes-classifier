@@ -217,8 +217,8 @@ def generate_college_ranking_bar(college_data, df):
     # Take top 15 for readability
     sorted_colleges = sorted_colleges.head(15)
     
-    # Create smaller figure size
-    plt.figure(figsize=(10, 8))
+    # Create larger figure size
+    plt.figure(figsize=(15, 12)) # Increase figsize
     
     # Define the order of aims
     aim_order = [
@@ -354,8 +354,8 @@ def generate_balanced_departments_chart(dept_data, df):
     # Flip the order for plotting (so highest score is at the top)
     plot_depts = top_depts.iloc[::-1]
     
-    # Create a smaller stacked bar chart
-    plt.figure(figsize=(10, 8))
+    # Create a larger stacked bar chart
+    plt.figure(figsize=(15, 12)) # Increase figsize
     
     # Define standard aim order to match the college ranking chart
     aims_mapping = {
