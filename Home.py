@@ -55,7 +55,7 @@ for i in range(1, len(parts), 3):
 
     # Display the image using st.image if the file exists
     if visualizations_exist and image_full_path.exists():
-        st.image(str(image_full_path), caption=alt_text)
+        st.image(str(image_full_path), caption=alt_text, width=600)
     else:
         # If image doesn't exist, show a warning or the alt text
         st.warning(f"Image not found: {image_path_md}")
