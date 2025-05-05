@@ -8,3 +8,9 @@ data/*
 !data/classified_learning_outcomes_cleaned.csv
 !data/course_urls.txt
 !data/.keep
+
+# OS-specific files
+.DS_Store
+
+# Python cache
+__pycache__/
