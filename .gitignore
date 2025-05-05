@@ -7,6 +7,7 @@ interactive_exploration.ipynb
 data/*
 !data/classified_learning_outcomes_cleaned.csv
 !data/course_urls.txt
+!data/sample_20250503_143216_gpt4.5_suggested_outcomes.csv
 !data/.keep
 
 # OS-specific files
