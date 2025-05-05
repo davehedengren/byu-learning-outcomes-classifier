@@ -256,6 +256,51 @@ if df is not None:
             format_dict = {aim: '{:.1f}%' for aim in BYU_AIMS}
             st.dataframe(college_summary_sorted.style.format(format_dict))
 
+            # --- Add Department Distribution Table (similar to College one) ---
+            st.subheader("Distribution by Department")
+            # Use the original unfiltered df for department comparison
+            # Calculate Percentage distribution
+            dept_aim_dist = df.groupby('department')['best_aim'].value_counts(normalize=True).unstack(fill_value=0) * 100
+            dept_aim_dist = dept_aim_dist.reindex(columns=BYU_AIMS, fill_value=0)
+            
+            # Calculate Total counts
+            dept_counts = df['department'].value_counts().rename('Total Outcomes')
+            
+            # Join counts and percentages
+            dept_summary = dept_aim_dist.join(dept_counts)
+            # Ensure 'Total Outcomes' is the first column
+            dept_cols_order = ['Total Outcomes'] + [col for col in dept_summary.columns if col != 'Total Outcomes']
+            dept_summary = dept_summary[dept_cols_order]
+
+            # Add sorting option, default to Intellectually Enlarging
+            dept_sort_options = ["Alphabetical", "Total Outcomes"] + BYU_AIMS
+            # Find the index of the default value, handling potential absence
+            dept_default_sort_option = "Intellectually Enlarging"
+            try:
+                dept_default_index = dept_sort_options.index(dept_default_sort_option)
+            except ValueError:
+                dept_default_index = 0 # Fallback to Alphabetical if not found
+            
+            dept_sort_by_col = st.selectbox(
+                "Sort Departments by:", 
+                dept_sort_options, 
+                index=dept_default_index, # Set default selection
+                key="dept_sort_tab1" # Use a unique key
+            )
+
+            if dept_sort_by_col == "Alphabetical":
+                 # Default sort is alphabetical by index (department name)
+                 dept_summary_sorted = dept_summary.sort_index()
+            elif dept_sort_by_col in dept_summary.columns:
+                # Sort the DataFrame by the selected column's value, descending
+                dept_summary_sorted = dept_summary.sort_values(by=dept_sort_by_col, ascending=False)
+            else:
+                 # Fallback to alphabetical if somehow column is invalid
+                 dept_summary_sorted = dept_summary.sort_index()
+
+            # Display the sorted department summary table (counts + percentages)
+            st.dataframe(dept_summary_sorted.style.format(format_dict)) # Reuse format_dict
+
         # Plot 3: Distribution by Department (if a specific college is selected)
         elif selected_college != "All" and selected_department == "All":
              st.subheader(f"Distribution by Department within {selected_college}")
