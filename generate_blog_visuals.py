@@ -253,7 +253,7 @@ def generate_college_ranking_bar(college_data, df):
             )
             bottom += plot_colleges[aim]
     
-    # Add IE scores as text with smaller font
+    # Add IE scores as text with larger font
     for i, college in enumerate(plot_colleges.index):
         ie_percent = plot_colleges.loc[college, 'Intellectually Enlarging']
         plt.text(
@@ -261,21 +261,21 @@ def generate_college_ranking_bar(college_data, df):
             i,
             f"Score: {ie_percent:.1f}",
             va='center',
-            fontsize=7  # Even smaller font for scores
+            fontsize=9  # Increased score font size
         )
     
-    # Set chart properties with smaller fonts
-    plt.title('BYU Colleges Ranked by Focus on Intellectual Enlargement', fontsize=12)
-    plt.xlabel('Percentage Distribution Across Aims', fontsize=10)
+    # Set chart properties with larger fonts
+    plt.title('BYU Colleges Ranked by Focus on Intellectual Enlargement', fontsize=14) # Increased title size
+    plt.xlabel('Percentage Distribution Across Aims', fontsize=12) # Increased label size
     plt.xlim(0, 120)  # Reduce the x-axis limit
     plt.grid(True, linestyle='--', alpha=0.7, which='both', axis='x')
     
-    # Adjust y-axis tick label font size - make even smaller
-    plt.yticks(fontsize=8)
-    plt.xticks(fontsize=8)
+    # Adjust y-axis tick label font size 
+    plt.yticks(fontsize=10) # Increased tick size
+    plt.xticks(fontsize=10) # Increased tick size
     
     # Position legend better to avoid overlap
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, fontsize=8)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, fontsize=10) # Increased legend size
     
     # Add more space at the bottom for the legend
     plt.subplots_adjust(bottom=0.15)
@@ -391,27 +391,27 @@ def generate_balanced_departments_chart(dept_data, df):
         )
         bottom += values
     
-    # Add wholistic scores as text with smaller font
+    # Add wholistic scores as text with larger font
     for i, (_, row) in enumerate(plot_depts.iterrows()):
         plt.text(
             102,  # Move closer to the bars
             i,
             f"Score: {row['wholistic_score']:.1f}",
             va='center',
-            fontsize=7  # Even smaller font for scores
+            fontsize=9  # Increased score font size
         )
     
-    # Set chart properties with smaller fonts
-    plt.title('BYU Departments with Most Balanced Coverage of All Aims', fontsize=12)
-    plt.xlabel('Percentage Distribution Across Aims', fontsize=10)
+    # Set chart properties with larger fonts
+    plt.title('BYU Departments with Most Balanced Coverage of All Aims', fontsize=14) # Increased title size
+    plt.xlabel('Percentage Distribution Across Aims', fontsize=12) # Increased label size
     plt.xlim(0, 120)  # Reduce the x-axis limit
     
-    # Adjust y-axis tick label font size - make even smaller
-    plt.yticks(fontsize=8)
-    plt.xticks(fontsize=8)
+    # Adjust y-axis tick label font size
+    plt.yticks(fontsize=10) # Increased tick size
+    plt.xticks(fontsize=10) # Increased tick size
     
     # Position legend better to avoid overlap
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, fontsize=8)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, fontsize=10) # Increased legend size
     
     # Add more space at the bottom for the legend
     plt.subplots_adjust(bottom=0.15)

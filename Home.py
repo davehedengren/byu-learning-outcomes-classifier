@@ -55,7 +55,12 @@ for i in range(1, len(parts), 3):
 
     # Display the image using st.image if the file exists
     if visualizations_exist and image_full_path.exists():
-        st.image(str(image_full_path), caption=alt_text, width=600)
+        # Use different widths for different charts
+        if 'bar' in image_path_md: # Check if it's a bar chart
+            display_width = 900 
+        else: # Default width for other charts (like donut)
+            display_width = 600
+        st.image(str(image_full_path), caption=alt_text, width=display_width)
     else:
         # If image doesn't exist, show a warning or the alt text
         st.warning(f"Image not found: {image_path_md}")
