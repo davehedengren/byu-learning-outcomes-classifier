@@ -52,6 +52,8 @@ For each course, we provide three alternative learning outcomes focused on:
 - **Lifelong Learning and Service**
 
 These suggestions are generated using advanced AI models (GPT-4.5) trained on BYU's educational mission and aims.
+            
+They are NOT expected to be ready to use without revision. They are to help you imagine ways you can improve your course to support the diverse learning outcomes that BYU students should be able to achieve.
 """)
 
 st.markdown("---")
